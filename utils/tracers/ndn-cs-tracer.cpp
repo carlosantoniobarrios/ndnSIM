@@ -18,6 +18,8 @@
  **/
 
 #include "ndn-cs-tracer.hpp"
+#include "fw/forwarder.hpp"
+#include "model/ndn-l3-protocol.hpp"
 #include "ns3/node.h"
 #include "ns3/packet.h"
 #include "ns3/config.h"
@@ -199,10 +201,14 @@ CsTracer::~CsTracer(){};
 void
 CsTracer::Connect()
 {
-  // // @TODO Do the same with NFD content store...
-  // Ptr<ContentStore> cs = m_nodePtr->GetObject<ContentStore>();
-  // cs->TraceConnectWithoutContext("CacheHits", MakeCallback(&CsTracer::CacheHits, this));
-  // cs->TraceConnectWithoutContext("CacheMisses", MakeCallback(&CsTracer::CacheMisses, this));
+  auto l3proto = m_nodePtr->GetObject<ndn::L3Protocol>();
+  auto fwd = l3proto->getForwarder();
+
+  fwd->afterCsHit.connect(
+      [this](Interest interest, Data data) { CacheHits(interest, data); });
+
+  fwd->afterCsMiss.connect(
+      [this](Interest interest) { CacheMisses(interest); });
 
   Reset();
 }
@@ -233,7 +239,7 @@ CsTracer::PrintHeader(std::ostream& os) const
      << "Node"
      << "\t"
 
-     << "Type"
+     << "Type(cabeee)"
      << "\t"
      << "Packets"
      << "\t";
@@ -253,19 +259,24 @@ void
 CsTracer::Print(std::ostream& os) const
 {
   Time time = Simulator::Now();
-
-  PRINTER("CacheHits", m_cacheHits);
-  PRINTER("CacheMisses", m_cacheMisses);
+  if (m_stats.m_cacheHits > 0) // added by cabeee to avoid printing zeros (easier to look at logs)
+  {
+    PRINTER("CacheHits(cabeee)   ", m_cacheHits);
+  }
+  if (m_stats.m_cacheMisses > 0) // added by cabeee to avoid printing zeros (easier to look at logs)
+  {
+    PRINTER("CacheMisses(cabeee)  ", m_cacheMisses);
+  }
 }
 
 void
-CsTracer::CacheHits(shared_ptr<const Interest>, shared_ptr<const Data>)
+CsTracer::CacheHits(const Interest&, const Data&)
 {
   m_stats.m_cacheHits++;
 }
 
 void
-CsTracer::CacheMisses(shared_ptr<const Interest>)
+CsTracer::CacheMisses(const Interest&)
 {
   m_stats.m_cacheMisses++;
 }
